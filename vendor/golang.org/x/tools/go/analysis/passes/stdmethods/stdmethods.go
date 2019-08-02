@@ -8,7 +8,6 @@ package stdmethods
 
 import (
 	"go/ast"
-	"go/token"
 	"go/types"
 	"strings"
 
@@ -117,6 +116,13 @@ func canonicalMethod(pass *analysis.Pass, id *ast.Ident) {
 	args := sign.Params()
 	results := sign.Results()
 
+	// Special case: WriteTo with more than one argument,
+	// not trying at all to implement io.WriterTo,
+	// comes up often enough to skip.
+	if id.Name == "WriteTo" && args.Len() > 1 {
+		return
+	}
+
 	// Do the =s (if any) all match?
 	if !matchParams(pass, expect.args, args, "=") || !matchParams(pass, expect.results, results, "=") {
 		return
@@ -131,12 +137,16 @@ func canonicalMethod(pass *analysis.Pass, id *ast.Ident) {
 			expectFmt += " (" + argjoin(expect.results) + ")"
 		}
 
-		actual := types.TypeString(sign, (*types.Package).Name)
+		actual := typeString(sign)
 		actual = strings.TrimPrefix(actual, "func")
 		actual = id.Name + actual
 
 		pass.Reportf(id.Pos(), "method %s should have signature %s", actual, expectFmt)
 	}
+}
+
+func typeString(typ types.Type) string {
+	return types.TypeString(typ, (*types.Package).Name)
 }
 
 func argjoin(x []string) string {
@@ -159,7 +169,7 @@ func matchParams(pass *analysis.Pass, expect []string, actual *types.Tuple, pref
 		if i >= actual.Len() {
 			return false
 		}
-		if !matchParamType(pass.Fset, pass.Pkg, x, actual.At(i).Type()) {
+		if !matchParamType(x, actual.At(i).Type()) {
 			return false
 		}
 	}
@@ -170,13 +180,8 @@ func matchParams(pass *analysis.Pass, expect []string, actual *types.Tuple, pref
 }
 
 // Does this one type match?
-func matchParamType(fset *token.FileSet, pkg *types.Package, expect string, actual types.Type) bool {
+func matchParamType(expect string, actual types.Type) bool {
 	expect = strings.TrimPrefix(expect, "=")
-	// Strip package name if we're in that package.
-	if n := len(pkg.Name()); len(expect) > n && expect[:n] == pkg.Name() && expect[n] == '.' {
-		expect = expect[n+1:]
-	}
-
 	// Overkill but easy.
-	return actual.String() == expect
+	return typeString(actual) == expect
 }

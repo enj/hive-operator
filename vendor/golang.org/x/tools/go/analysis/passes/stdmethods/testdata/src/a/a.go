@@ -7,6 +7,7 @@ package a
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
 )
 
 type T int
@@ -23,6 +24,14 @@ func (U) GobDecode() {} // want `should have signature GobDecode\(\[\]byte\) err
 
 // Test rendering of type names such as xml.Encoder in diagnostic.
 func (U) MarshalXML(*xml.Encoder) {} // want `method MarshalXML\(\*xml.Encoder\) should...`
+
+func (U) UnmarshalXML(*xml.Decoder, xml.StartElement) error { // no error: signature matches xml.Unmarshaler
+	return nil
+}
+
+func (U) WriteTo(w io.Writer) {} // want `method WriteTo\(w io.Writer\) should have signature WriteTo\(io.Writer\) \(int64, error\)`
+
+func (T) WriteTo(w io.Writer, more, args int) {} // ok - clearly not io.WriterTo
 
 type I interface {
 	ReadByte() byte // want `should have signature ReadByte\(\) \(byte, error\)`
